@@ -397,7 +397,7 @@ sumBigNum:
         jmp pre_addLoop
 
     pre_addLoop:
-        ; this is preparation for calculating and storing result in reversedNum1
+        ; this is preparation for calculating and storing result in num1
         xor eax, eax            ; store digit
         mov bl, 10              ; dividing
         xor ecx, ecx            ; counter: from 0 -> max length stored at [esp]
