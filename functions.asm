@@ -337,30 +337,12 @@ reverseStr:
     ret
 
 ;----------------------------------------
-; void addBigNum()
+; int sumBigNum()
 ; Calculate the sum of two big numbers
-; First para: esi -> num1
-; Second para: edi -> num2
-; Third para: reversedNum1
-; Fourth para: reversedNum2
-; Store result in num1: [esp + 0x4] in the end
-; Stack in the end before return will look like that
-
-; [len]                   -> esp
-; [edi]
-; [esi]
-; [edx]
-; [ecx]
-; [ebx]
-; [eax]
-; [old ebp]
-; [return address]
-; [reversedNum2]
-; [reversedNum1]
-; [num2]
-; [num1]          -> it stores the result in the end
-
-addBigNum:
+; First para: sum -> destination to store
+; Next paras: num2, num1
+; After finished label, num1 holds result reversed, sum holds the right one
+sumBigNum:
     ; Backup things
     push ebp
     mov ebp, esp
@@ -369,73 +351,69 @@ addBigNum:
     push ecx
     push edx
 
-    mov esi, [ebp+0x14]         ; num1
-    mov edi, [ebp+0x10]         ; num2
-    push esi                    ; store num1
-    push edi                    ; store num2
-
-    call sLen
-    mov eax, esi                ; strlen(num1)
-    
+    ; Code
+    ; First to reverse the two string
+    ; sum = reversedStr(num1)
+    ; num1 = reversedStr(num2)
+    mov esi, [ebp+0x10] ; num1
+    mov edi, [ebp+0x8]  ; sum
+    call reverseStr
     mov esi, edi
     call sLen
-    mov edx, esi                ; strlen(num2)
-    push eax                    ; Suppose it is the max length
-    cmp eax, edx                ; Compare to find the max length
-    jg reverseStep_addBigNum
-    pop eax
-    push edx                    ; len = strlen(num2)
-    
-    reverseStep_addBigNum:    
-        mov esi, [esp+0x4]      ; num2
-        mov edi, [ebp+0x8]      ; reversedNum2
-        call reverseStr         ; if num2 = 30, after that it would be 03
+    mov edx, esi
+    push edx            ; suppose it is max_len
 
-        mov esi, [esp+0x8]      ; num1
-        mov edi, [ebp+0xc]      ; reversedNum1
-        call reverseStr
-    ; appendZeros_addBigNum:
-    mov bl, byte "0"
+    mov esi, [ebp+0xc]  ; num2
+    mov edi, [ebp+0x10] ; num1
+    call reverseStr
+    mov esi, edi
+    call sLen
+    mov eax, esi
     cmp eax, edx
-    jl appendZeros_addBigNum_1
-    jmp appendZeros_addBigNum_2 ; if num2 is "03", append zeros to the right until it gets the max length
+    jl pre_appendZeros
+    pop edx
+    push eax            ; change max_len if eax > edx
 
-    appendZeros_addBigNum_1:
-        mov [edi + eax], ebx    ; edi is holding reversedNum1 so no need to change
+    pre_appendZeros:
+        mov esi, [ebp+0x10] ; point to num1
+        mov edi, [ebp+0x8]  ; point to sum
+        mov bl, byte "0"    ; prepare byte to append
+        cmp eax, [esp]      ; compare to add "0"
+        jl appendZeros_num1
+        jmp appendZeros_sum
+
+    appendZeros_num1:
+        mov [esi + eax], ebx
         inc eax
         cmp eax, [esp]
-        jl appendZeros_addBigNum_1
-        jmp finished_appending_addBigNum
+        jl appendZeros_num1
+        jmp pre_addLoop
 
-    appendZeros_addBigNum_2:
-        mov edi, [ebp+0x8]      ; change to reversedNum2
+    appendZeros_sum:
         mov [edi + edx], ebx
         inc edx
         cmp edx, [esp]
-        jl appendZeros_addBigNum_2
-        jmp finished_appending_addBigNum
+        jl appendZeros_sum
+        jmp pre_addLoop
 
-    finished_appending_addBigNum:
-        mov esi, [ebp+0xc]      ; make esi -> reversedNum1
-        mov edi, [ebp+0x8]      ; make edi -> reversedNum2
-
+    pre_addLoop:
         ; this is preparation for calculating and storing result in reversedNum1
         xor eax, eax            ; store digit
         mov bl, 10              ; dividing
         xor ecx, ecx            ; counter: from 0 -> max length stored at [esp]
         xor edx, edx            ; the carry
-
-    addingLoop_addBigNum:
-        push edx                ; backup carry
-        xor eax, eax            ; cleanning up
-        xor edx, edx            ; cleanning up
+    
+    addLoop:
+        push edx
+        xor eax, eax
+        xor edx, edx
         mov al, [esi + ecx]
         mov dl, [edi + ecx]
         sub al, "0"             ; num1[i] - "0"
-        sub dl, "0"             ; num2[i] - "0"
-        add al, dl              ; num1[i] - "0" + num2[i] - "0"
+        sub dl, "0"             ; sum[i] - "0"
+        add al, dl              ; num1[i] - "0" + sum[i] - "0"
         pop edx                 ; restore carry
-        add al, dl              ; digit = num1[i] - "0" + num2[i] - "0" + carry
+        add al, dl              ; digit = num1[i] - "0" + sum[i] - "0" + carry
         div bl
         ; ah = ax % bl
         ; al = ax / bl -> carry
@@ -443,28 +421,26 @@ addBigNum:
         mov [esi + ecx], byte ah; num1[i] = (digit % 10) + "0"
         mov dl, al              ; carry = digit / 10
         inc ecx                 ; i++
-        cmp ecx, [esp]          ; cmp i, max length
-        jne addingLoop_addBigNum
+        cmp ecx, [esp]          ; cmp i, max_len
+        jne addLoop
 
         cmp edx, 1              ; if there is a carry after adding
-        jne finished_addBigNum
+        jne finished
         add dl, "0"             ; append the carry to the end of reversed string
         mov [esi + ecx], byte dl
-    finished_addBigNum:
-        add esp, 0x4            ; skip the max length value
-        mov esi, [esp + 0x4*9]  ; point to reversedNum1
-        mov edi, [esp + 0x4*11] ; point to num1
-        call reverseStr
-    ; Restore things
-    pop edi
-    pop esi
-    pop edx    
+    finished:
+        add esp, 0x4            ; skip the max_len
+        ; mov esi, [ebp + 0x10]   ; num1
+        ; mov edi, [ebp + 0x8]    ; sum
+        ; but no need to do that
+        call reverseStr         ; sum = reversed(num1)
+
+    pop edx
     pop ecx
     pop ebx
     pop eax
     mov esp, ebp
     pop ebp
-    
     ret
 
 ;----------------------------------------
